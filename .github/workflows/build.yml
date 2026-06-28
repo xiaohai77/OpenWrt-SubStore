@@ -22,7 +22,6 @@ jobs:
       - name: Setup feeds
         run: |
           cd openwrt-sdk
-          echo "src-git luci https://git.openwrt.org/project/luci.git;openwrt-23.05" >> feeds.conf.default
           ./scripts/feeds update luci
           ./scripts/feeds install -a -p luci
 
