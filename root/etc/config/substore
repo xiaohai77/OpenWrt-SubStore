@@ -1,7 +1,7 @@
 config substore 'config'
 	option enabled '0'
 	option frontend_port '3001'
-	option frontend_host '0.0.0.0'
+	option frontend_host '::'
 	option frontend_backend_path '/sub-store-api'
 	option data_dir '/etc/sub-store'
 	option backend_sync_cron ''
