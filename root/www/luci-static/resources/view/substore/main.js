@@ -48,7 +48,7 @@ return view.extend({
 		var m, s, o;
 
 		m = new form.Map('substore', _('Sub-Store'),
-			_('高级订阅管理器，前后端已打包在此软件包中。'));
+			_('高级订阅管理器'));
 
 		// ── 状态栏 ──────────────────────────────────────────────
 		s = m.section(form.NamedSection, 'config', 'substore', _('服务状态'));
@@ -109,76 +109,25 @@ return view.extend({
 		o = s.option(form.Value, 'backend_custom_name', _('实例名称'), _('显示在前端界面上的后端名称'));
 		o.default = 'OpenWrt';
 
-		o = s.option(form.Value, 'backend_custom_icon', _('自定义图标URL'), _('显示在前端界面上的后端图标'));
-		o.placeholder = 'https://example.com/icon.png';
-
-		// ── 端口 / 网络 ─────────────────────────────────────────
-		s = m.section(form.NamedSection, 'config', 'substore', _('端口与网络'));
-		s.anonymous = true;
-
-		o = s.option(form.Value, 'frontend_port', _('服务端口'), _('前端和后端统一使用此端口'));
-		o.default = '3001';
-		o.datatype = 'port';
-
-		o = s.option(form.Value, 'frontend_host', _('监听地址'), _(':: 表示同时监听 IPv4 和 IPv6'));
-		o.default = '::';
-		o.placeholder = '::';
-
-		o = s.option(form.Value, 'frontend_backend_path', _('后端路径前缀'), _('作为 API 路径使用，避免使用特殊符号'));
+		o = s.option(form.Value, 'frontend_backend_path', _('后端路径前缀'), _('作为 API 路径使用，避免使用特殊符号，开头的 / 已固定，无需输入'));
 		o.default = '/sub-store-api';
-		o.placeholder = '/sub-store-api';
+		o.placeholder = 'sub-store-api';
 
-		// ── 同步 / 定时任务 ─────────────────────────────────────
-		s = m.section(form.NamedSection, 'config', 'substore', _('同步与定时任务'));
-		s.anonymous = true;
+		// 读取时去掉开头的 /，只在输入框里显示路径内容本身
+		o.cfgvalue = function(section_id) {
+			var v = uci.get('substore', section_id, 'frontend_backend_path') || this.default;
+			return v.replace(/^\/+/, '');
+		};
 
-		o = s.option(form.Value, 'backend_sync_cron', _('订阅同步定时'), _('定时将订阅推送到 Gist，例如 55 23 * * *（每天23点55分）'));
-		o.placeholder = '55 23 * * *';
-
-		o = s.option(form.Value, 'backend_upload_cron', _('数据备份定时'), _('定时将 Sub-Store 全部数据备份到 Gist'));
-		o.placeholder = '0 2 * * *';
-
-		o = s.option(form.Value, 'backend_download_cron', _('数据恢复定时'), _('定时从 Gist 恢复 Sub-Store 数据'));
-		o.placeholder = '';
-
-		o = s.option(form.Value, 'produce_cron', _('订阅预处理定时'), _('格式：cron,类型,名称；多个用分号连接，类型为 sub 或 col'));
-		o.placeholder = '0 */2 * * *,sub,订阅名称';
-
-		// ── 推送通知 ────────────────────────────────────────────
-		s = m.section(form.NamedSection, 'config', 'substore', _('推送通知'));
-		s.anonymous = true;
-
-		o = s.option(form.Value, 'push_service', _('推送服务URL'), _('支持 Bark、Telegram、PushPlus 等，用 [推送标题] 和 [推送内容] 作为占位符'));
-		o.placeholder = 'https://api.day.app/YOUR_KEY/[推送标题]/[推送内容]';
-
-		// ── 启动数据恢复 ─────────────────────────────────────────
-		s = m.section(form.NamedSection, 'config', 'substore', _('启动数据恢复'));
-		s.anonymous = true;
-
-		o = s.option(form.Value, 'data_url', _('远程数据URL'), _('每次启动时从此地址拉取并恢复数据，支持 Gist Raw 链接'));
-		o.placeholder = 'https://gist.githubusercontent.com/user/id/raw/Sub-Store#noCache';
-
-		o = s.option(form.Value, 'data_url_post', _('拉取后执行'), _('拉取数据后执行的 JS 表达式，例如设置 Gist Token'));
-		o.placeholder = "content.settings.gistToken='your_token_here'";
-
-		// ── 高级设置 ────────────────────────────────────────────
-		s = m.section(form.NamedSection, 'config', 'substore', _('高级设置'));
-		s.anonymous = true;
-
-		o = s.option(form.Value, 'cors_allowed_origins', _('CORS 允许来源'), _('允许访问后端 API 的浏览器来源，多个用逗号分隔，* 表示允许所有'));
-		o.default = '*';
-		o.placeholder = '*';
-
-		o = s.option(form.Value, 'backend_default_proxy', _('默认代理'), _('抓取订阅时使用的代理，支持 socks5://、http://、https://'));
-		o.placeholder = 'http://127.0.0.1:7890';
-
-		o = s.option(form.Value, 'max_header_size', _('最大 Header 大小（字节）'), _('遇到 Headers Overflow Error 时可适当调大'));
-		o.default = '32768';
-		o.datatype = 'uinteger';
-
-		o = s.option(form.Value, 'body_json_limit', _('JSON Body 大小限制'), _('例如 1mb、10mb'));
-		o.default = '1mb';
-		o.placeholder = '1mb';
+		// 保存时去除多余的 /，再统一拼上开头的 /；清空则回退默认值
+		o.write = function(section_id, value) {
+			value = (value || '').replace(/^\/+/, '');
+			if (value === '') {
+				uci.set('substore', section_id, 'frontend_backend_path', this.default);
+			} else {
+				uci.set('substore', section_id, 'frontend_backend_path', '/' + value);
+			}
+		};
 
 		return m.render().then(function(node) {
 
