@@ -1,0 +1,21 @@
+{
+	"luci-app-substore": {
+		"description": "Grant access to Sub-Store service controls",
+		"read": {
+			"uci": ["substore"],
+			"ubus": {
+				"service": ["list"]
+			}
+		},
+		"write": {
+			"uci": ["substore"],
+			"ubus": {
+				"rc": ["init"]
+			},
+			"file": {
+				"/usr/libexec/substore/update-backend.sh": ["exec"],
+				"/usr/libexec/substore/update-frontend.sh": ["exec"]
+			}
+		}
+	}
+}
