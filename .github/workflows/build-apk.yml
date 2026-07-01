@@ -97,6 +97,7 @@ jobs:
           accountId: ${{ secrets.CF_ACCOUNT_ID }}
           projectName: substore-openwrt
           directory: site
+          branch: main
 
       - name: Cleanup key
         run: |
