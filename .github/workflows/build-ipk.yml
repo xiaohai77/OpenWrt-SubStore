@@ -1,4 +1,4 @@
-name: luci-app-substore-ipk
+name: luci-app-substore
 
 on:
   workflow_dispatch:
@@ -49,17 +49,6 @@ jobs:
           cp -r src openwrt-sdk/package/luci-app-substore
           ls openwrt-sdk/package/luci-app-substore/
 
-      - name: Set package version variables
-        run: |
-          sed -i "s/^PKG_RELEASE:=.*/PKG_RELEASE:=${{ github.run_number }}/" openwrt-sdk/package/luci-app-substore/Makefile
-
-          VERSION=$(grep "^PKG_VERSION:=" openwrt-sdk/package/luci-app-substore/Makefile | cut -d= -f2)
-          VERSION=$(echo "$VERSION" | sed 's/\.0$//')
-          RELEASE=$(grep "^PKG_RELEASE:=" openwrt-sdk/package/luci-app-substore/Makefile | cut -d= -f2)
-
-          echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "APP_RELEASE=$RELEASE" >> "$GITHUB_ENV"
-
       - name: Build
         run: |
           cd openwrt-sdk
@@ -69,30 +58,20 @@ jobs:
       - name: Collect IPK
         run: |
           mkdir -p output
-
-          IPK=$(find openwrt-sdk/bin -type f -name "luci-app-substore*.ipk" | head -n 1)
-
-          if [ -z "$IPK" ]; then
-            echo "No IPK found!"
-            exit 1
-          fi
-
-          cp "$IPK" "output/luci-app-substore-${APP_VERSION}.${APP_RELEASE}.ipk"
-
-          ls -lh output
+          find openwrt-sdk/bin -name "luci-app-substore*.ipk" -exec cp {} output/ \;
+          ls -lh output/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: luci-app-substore-ipk
+          name: luci-app-substore-all
           path: output/*.ipk
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ env.APP_VERSION }}.${{ env.APP_RELEASE }}-ipk
-          name: luci-app-substore ${{ env.APP_VERSION }}.${{ env.APP_RELEASE }} (ipk)
+          tag_name: v1.0.${{ github.run_number }}
+          name: luci-app-substore
           files: output/*.ipk
-          overwrite_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
