@@ -89,6 +89,7 @@ jobs:
       - name: Build signed repo index
         run: |
           set -e
+          sudo ln -sf $(which sha256sum) /usr/local/bin/sha256
           REPO_DIR=repo-new/openwrt-23.05/x86_64
           mkdir -p "$REPO_DIR"
           cp output/*.ipk "$REPO_DIR/"
