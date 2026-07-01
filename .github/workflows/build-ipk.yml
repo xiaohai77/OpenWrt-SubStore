@@ -1,4 +1,4 @@
-name: luci-app-substore
+name: luci-app-substore-ipk
 
 on:
   workflow_dispatch:
