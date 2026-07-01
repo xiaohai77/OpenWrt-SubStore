@@ -75,7 +75,7 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v1.0.${{ github.run_number }}-apk
+          tag_name: v2.9.${{ github.run_number }}-apk
           name: luci-app-substore (apk)
           files: output/*.apk
         env:
