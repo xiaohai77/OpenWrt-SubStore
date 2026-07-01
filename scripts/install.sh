@@ -4,7 +4,7 @@
 
 set -e
 
-REPO_URL="https://substore-openwrt.pages.dev"
+REPO_URL="https://substore-openwrt.445568.xyz"
 
 echo "=== luci-app-substore 一键安装 ==="
 
