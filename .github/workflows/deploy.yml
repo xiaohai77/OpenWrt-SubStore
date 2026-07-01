@@ -83,7 +83,7 @@ jobs:
         run: |
           set -e
           echo "${{ secrets.APK_SIGN_KEY }}" > /tmp/apk-sign.key
-          openssl ec -in /tmp/apk-sign.key -pubout -out site/substore-pub.pem
+          openssl ec -in /tmp/apk-sign.key -pubout -out site/substore-apk.pem
 
           APK_BIN=$(find sdk-apk/staging_dir -type f -name apk -path "*/host/bin/*" | head -n1)
 
@@ -92,7 +92,7 @@ jobs:
           cp apk-download/*.apk "$REPO_DIR/"
 
           mkdir -p /tmp/keys
-          cp site/substore-pub.pem /tmp/keys/
+          cp site/substore-apk.pem /tmp/keys/
 
           cd "$REPO_DIR"
           "$GITHUB_WORKSPACE/$APK_BIN" mkndx \
@@ -106,7 +106,7 @@ jobs:
 
       - name: Copy IPK public key and install.sh
         run: |
-          cp keys/ipk-sign.pub site/ipk-sign.pub
+          cp keys/ipk-sign.pub site/substore-ipk.pub
           cp scripts/install.sh site/install.sh
 
       - name: Generate index.html (Nikki-style directory tree)
