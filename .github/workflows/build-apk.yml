@@ -34,44 +34,69 @@ jobs:
         run: |
           mkdir -p src/root/usr/libexec/substore
           mkdir -p src/root/www/sub-store
-          echo "Downloading backend..."
           wget -q -O src/root/usr/libexec/substore/sub-store.bundle.js \
             https://github.com/sub-store-org/Sub-Store/releases/latest/download/sub-store.bundle.js
-          echo "Backend size: $(du -sh src/root/usr/libexec/substore/sub-store.bundle.js)"
-          echo "Downloading frontend..."
           wget -q -O /tmp/dist.zip \
             https://github.com/sub-store-org/Sub-Store-Front-End/releases/latest/download/dist.zip
           unzip -q /tmp/dist.zip -d src/root/www/sub-store
-          echo "Frontend size: $(du -sh src/root/www/sub-store/dist)"
 
       - name: Copy package
         run: |
           cp -r src openwrt-sdk/package/luci-app-substore
-          ls openwrt-sdk/package/luci-app-substore/
 
       - name: Build
         run: |
           cd openwrt-sdk
           make defconfig
-          make package/luci-app-substore/compile V=s 2>&1 | tail -50
+          make package/luci-app-substore/compile V=s 2>&1 | tail -80
 
-      - name: Collect APK
+      - name: Prepare signing key
         run: |
-          mkdir -p output
-          find openwrt-sdk/bin -name "luci-app-substore*.apk" -exec cp {} output/ \;
-          ls -lh output/
+          echo "${{ secrets.APK_SIGN_KEY }}" > /tmp/private-key.pem
+          openssl ec -in /tmp/private-key.pem -pubout -out /tmp/substore-pub.pem
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: luci-app-substore-apk
-          path: output/*.apk
+      - name: Build signed repo index
+        run: |
+          set -e
+          REPO_DIR=repo-new/openwrt-25.12/aarch64_cortex-a53
+          mkdir -p "$REPO_DIR"
+          find openwrt-sdk/bin -name "luci-app-substore*.apk" -exec cp {} "$REPO_DIR/" \;
+          ls -lh "$REPO_DIR"
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
+          APK_BIN=$(find openwrt-sdk/staging_dir -type f -name apk -path "*/host/bin/*" | head -n1)
+          echo "Using apk binary: $APK_BIN"
+
+          mkdir -p /tmp/keys
+          cp /tmp/substore-pub.pem /tmp/keys/
+
+          cd "$REPO_DIR"
+          "$GITHUB_WORKSPACE/$APK_BIN" mkndx \
+            --keys-dir /tmp/keys \
+            --sign /tmp/private-key.pem \
+            --output packages.adb \
+            *.apk
+          ls -lh
+
+      - name: Merge with existing live site
+        run: |
+          mkdir -p site
+          wget -r -np -nH --cut-dirs=0 -P site \
+            "https://substore-openwrt.pages.dev/" 2>/dev/null || echo "首次部署，线上暂无内容，跳过合并"
+          rm -rf site/index.html* site/*.tmp 2>/dev/null || true
+          cp -r repo-new/* site/ 2>/dev/null || true
+          mkdir -p site
+          cp -r repo-new/openwrt-25.12 site/
+          cp /tmp/substore-pub.pem site/substore-pub.pem
+          ls -R site
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/pages-action@v1
         with:
-          tag_name: v1.0.${{ github.run_number }}-apk
-          name: luci-app-substore (apk)
-          files: output/*.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          projectName: substore-openwrt
+          directory: site
+
+      - name: Cleanup key
+        run: |
+          shred -u /tmp/private-key.pem 2>/dev/null || rm -f /tmp/private-key.pem
