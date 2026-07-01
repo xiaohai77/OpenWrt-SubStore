@@ -5,7 +5,7 @@ LUCI_DEPENDS:=+node +unzip +wget-ssl
 LUCI_PKGARCH:=all
 
 PKG_NAME:=luci-app-substore
-PKG_VERSION:=1.0.0
+PKG_VERSION:=2.9
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-3.0
 PKG_MAINTAINER:=xiaohai77
