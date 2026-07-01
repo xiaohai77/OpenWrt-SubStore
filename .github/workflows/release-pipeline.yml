@@ -59,8 +59,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           for i in $(seq 1 60); do
-            IPK_STATUS=$(gh run list --workflow=build-ipk.yml --limit 1 --json status,conclusion --jq '.[0]')
-            APK_STATUS=$(gh run list --workflow=build-apk.yml --limit 1 --json status,conclusion --jq '.[0]')
+            IPK_STATUS=$(gh run list --workflow=substore-ipk.yml --limit 1 --json status,conclusion --jq '.[0]')
+            APK_STATUS=$(gh run list --workflow=substore-apk.yml --limit 1 --json status,conclusion --jq '.[0]')
             IPK_DONE=$(echo "$IPK_STATUS" | jq -r '.status == "completed"')
             APK_DONE=$(echo "$APK_STATUS" | jq -r '.status == "completed"')
             echo "IPK: $IPK_STATUS"
