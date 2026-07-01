@@ -1,4 +1,4 @@
-name: luci-app-substore-ipk
+name: luci-app-substore
 
 on:
   workflow_dispatch:
@@ -75,54 +75,3 @@ jobs:
           files: output/*.ipk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Prepare signing key
-        run: |
-          echo "${{ secrets.IPK_SIGN_KEY }}" > /tmp/ipk-sign.key
-
-      - name: Locate usign tool
-        run: |
-          USIGN_BIN=$(find openwrt-sdk -type f -name usign -path "*/host/bin/*" | head -n1)
-          echo "USIGN_BIN=$USIGN_BIN" >> $GITHUB_ENV
-          echo "找到 usign: $USIGN_BIN"
-
-      - name: Build signed repo index
-        run: |
-          set -e
-          sudo tee /usr/local/bin/sha256 > /dev/null << 'EOF'
-          #!/bin/bash
-          sha256sum "$1" | awk '{print $1}'
-          EOF
-          sudo chmod +x /usr/local/bin/sha256
-
-          REPO_DIR=repo-new/openwrt-23.05/x86_64
-          mkdir -p "$REPO_DIR"
-          cp output/*.ipk "$REPO_DIR/"
-          cd "$REPO_DIR"
-          "$GITHUB_WORKSPACE/openwrt-sdk/scripts/ipkg-make-index.sh" . > Packages
-          gzip -kf Packages
-          "$GITHUB_WORKSPACE/$USIGN_BIN" -S -m Packages -s /tmp/ipk-sign.key -x Packages.sig
-          ls -lh
-
-      - name: Merge with existing live site
-        run: |
-          mkdir -p site
-          wget -r -np -nH --cut-dirs=0 -P site \
-            "https://substore-openwrt.pages.dev/" 2>/dev/null || echo "首次合并，忽略错误"
-          mkdir -p site
-          cp -r repo-new/openwrt-23.05 site/
-          cp src/keys/ipk-sign.pub site/ipk-sign.pub
-          ls -R site
-
-      - name: Deploy to Cloudflare Pages
-        uses: cloudflare/pages-action@v1
-        with:
-          apiToken: ${{ secrets.CF_API_TOKEN }}
-          accountId: ${{ secrets.CF_ACCOUNT_ID }}
-          projectName: substore-openwrt
-          directory: site
-          branch: main
-
-      - name: Cleanup key
-        run: |
-          shred -u /tmp/ipk-sign.key 2>/dev/null || rm -f /tmp/ipk-sign.key
