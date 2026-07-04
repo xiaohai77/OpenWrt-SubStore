@@ -40,20 +40,6 @@ jobs:
           ./scripts/feeds update luci
           ./scripts/feeds install -a -p luci
 
-      - name: Download Sub-Store backend and frontend
-        run: |
-          mkdir -p src/root/usr/libexec/substore
-          mkdir -p src/root/www/sub-store
-          echo "Downloading backend..."
-          wget -q -O src/root/usr/libexec/substore/sub-store.bundle.js \
-            https://github.com/sub-store-org/Sub-Store/releases/latest/download/sub-store.bundle.js
-          echo "Backend size: $(du -sh src/root/usr/libexec/substore/sub-store.bundle.js)"
-          echo "Downloading frontend..."
-          wget -q -O /tmp/dist.zip \
-            https://github.com/sub-store-org/Sub-Store-Front-End/releases/latest/download/dist.zip
-          unzip -q /tmp/dist.zip -d src/root/www/sub-store
-          echo "Frontend size: $(du -sh src/root/www/sub-store/dist)"
-
       - name: Copy package
         run: |
           cp -r src openwrt-sdk/package/luci-app-substore
@@ -63,7 +49,12 @@ jobs:
         run: |
           cd openwrt-sdk
           make defconfig
-          make package/luci-app-substore/compile V=s 2>&1 | tail -50
+          if ! make package/luci-app-substore/compile V=s > build.log 2>&1; then
+            echo "=== 编译失败，日志最后 150 行 ==="
+            tail -150 build.log
+            exit 1
+          fi
+          tail -50 build.log
 
       - name: Collect IPK
         run: |
