@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '0 */6 * * *'   
   workflow_dispatch:
+    inputs:
+      force:
+        description: "强制执行（勾选后跳过版本比对，即使上游没更新也会走完整流程，调试用）"
+        type: boolean
+        default: false
 
 jobs:
   check-and-release:
@@ -24,8 +29,11 @@ jobs:
           echo "后端 上游最新: $BACKEND_LATEST / 上次记录: $BACKEND_CACHED"
           echo "前端 上游最新: $FRONTEND_LATEST / 上次记录: $FRONTEND_CACHED"
 
-          if [ "$BACKEND_LATEST" != "$BACKEND_CACHED" ] || [ "$FRONTEND_LATEST" != "$FRONTEND_CACHED" ]; then
+          if [ "$BACKEND_LATEST" != "$BACKEND_CACHED" ] || [ "$FRONTEND_LATEST" != "$FRONTEND_CACHED" ] || [ "${{ inputs.force }}" = "true" ]; then
             echo "changed=true" >> $GITHUB_OUTPUT
+            if [ "${{ inputs.force }}" = "true" ]; then
+              echo "（强制模式：即使版本没变化，也继续走完整流程）"
+            fi
           else
             echo "changed=false" >> $GITHUB_OUTPUT
           fi
@@ -41,8 +49,14 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add .last-substore-backend-version .last-substore-frontend-version
-          git commit -m "chore: bump cached Sub-Store versions (backend ${{ steps.check.outputs.backend_latest }}, frontend ${{ steps.check.outputs.frontend_latest }})"
-          git push
+          # 强制模式下版本号可能跟缓存文件完全一样，没有实际改动可提交，
+          # git commit 在这种情况下会报错退出，所以先判断有没有真的改动。
+          if git diff --cached --quiet; then
+            echo "版本号没有变化，跳过提交（强制模式下属于正常情况)"
+          else
+            git commit -m "chore: bump cached Sub-Store versions (backend ${{ steps.check.outputs.backend_latest }}, frontend ${{ steps.check.outputs.frontend_latest }})"
+            git push
+          fi
 
       # 2026-07 新增：deploy.yml 现在除了发布签名的 ipk/apk 索引，还会把
       # sub-store.bundle.js / dist.zip 镜像到 Cloudflare（供固件那边编译
