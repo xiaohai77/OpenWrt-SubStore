@@ -109,6 +109,27 @@ jobs:
           cp keys/ipk-sign.pub site/substore-ipk.pub
           cp scripts/install.sh site/install.sh
 
+      - name: Mirror Sub-Store backend/frontend assets
+        # 2026-07 新增：把 Package/install 和 update-backend.sh/update-frontend.sh
+        # 需要下载的 bundle.js / dist.zip 也镜像一份到自己的 Cloudflare，
+        # 跟 ipk/apk 签名索引走同一套基建。这样本地/自建环境编译固件时
+        # 不用再直连 GitHub Releases（容易卡死），优先走这里，失败了
+        # Makefile 里还有退回 GitHub 直连的兜底逻辑。
+        # 这一步挂在 deploy.yml 里，因此每次 release-pipeline 检测到
+        # 上游 backend/frontend 版本变化触发 deploy 时，镜像也会跟着刷新。
+        run: |
+          set -e
+          mkdir -p site/assets
+          wget -q --timeout=30 --tries=3 \
+            "https://github.com/sub-store-org/Sub-Store/releases/latest/download/sub-store.bundle.js" \
+            -O site/assets/sub-store.bundle.js
+          wget -q --timeout=30 --tries=3 \
+            "https://github.com/sub-store-org/Sub-Store-Front-End/releases/latest/download/dist.zip" \
+            -O site/assets/dist.zip
+          [ -s site/assets/sub-store.bundle.js ] || { echo "backend 镜像下载失败"; exit 1; }
+          [ -s site/assets/dist.zip ] || { echo "frontend 镜像下载失败"; exit 1; }
+          ls -lh site/assets/
+
       - name: Generate index.html (directory tree)
         run: |
           python3 << 'EOF'
@@ -152,6 +173,9 @@ jobs:
             Cache-Control: no-cache, no-store, must-revalidate
 
           /openwrt-23.05/*
+            Cache-Control: no-cache, no-store, must-revalidate
+
+          /assets/*
             Cache-Control: no-cache, no-store, must-revalidate
 
           /*.pem
