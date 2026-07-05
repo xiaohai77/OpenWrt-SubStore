@@ -21,14 +21,22 @@ PKG_MAINTAINER:=xiaohai77
 # （旧版本 Makefile 靠的也是这个阶段），下载完直接装到 $(1) 里，
 # 不再依赖 PKG_BUILD_DIR / Build/Prepare。
 #
-# 2026-07 修复：之前这里直连 GitHub Releases 下载 bundle.js / dist.zip，
-# 没有超时设置。GitHub Actions 的 CI runner 在国外机房访问 GitHub 很快，
-# 从没暴露过问题；但本地/自建环境网络到 GitHub 不稳时，wget 会卡住不动、
-# 不报错也不退出，导致整个固件编译卡死几个小时（表现为编译日志停在某个
-# 毫不相关的包上，因为那只是并行编译里刚好同时跑完的其他任务）。
-# 现在改成优先走自己的 Cloudflare 镜像（跟 ipk/apk 签名索引同一套基建），
-# 镜像失败再退回 GitHub 直连兜底，并且两边都加了超时/重试，超时就直接
-# 报错退出，不会再无限期卡死。
+# 2026-07 修复 (第一版)：之前这里直连 GitHub Releases 下载 bundle.js /
+# dist.zip，没有超时设置。固件编译是大规模并行 make，同一个 runner 上
+# 同时有几十个下载/编译任务抢网络带宽，某个连接被挤到极慢（不是断，是
+# 几乎不流动），而 wget 默认没有超时，只要连接没被服务器断开就会一直
+# 等，不报错也不退出，导致整个固件编译卡死几个小时（现象是编译日志停
+# 在某个毫不相关的包上，因为那只是并行编译里刚好同时跑完的其他任务）。
+# 于是改成优先走自己的 Cloudflare 镜像（跟 ipk/apk 签名索引同一套基建），
+# 镜像失败再退回 GitHub 直连兜底，并加上超时/重试。
+#
+# 2026-07 修复 (第二版)：第一版校验只检查了"文件大小不为0"，结果
+# Cloudflare Pages 对不存在的路径（还没跑过 deploy.yml 生成 /assets/
+# 下的文件时）会返回一个非空的 404 错误页（HTML），被误判成"下载成功"，
+# 直到 unzip 才发现根本不是个 zip，编译失败。现在两处下载都额外做了
+# 内容校验（zip 用 unzip -t 测试完整性，js bundle 检查开头不是 HTML
+# 错误页），镜像返回的东西即使非空、只要内容不对，也会被判定失败并
+# 退回官方 GitHub 源，而不是原样往下走导致后面 unzip/安装失败。
 SUBSTORE_MIRROR_BACKEND_URL:=https://substore-openwrt.445568.xyz/assets/sub-store.bundle.js
 SUBSTORE_MIRROR_FRONTEND_URL:=https://substore-openwrt.445568.xyz/assets/dist.zip
 SUBSTORE_BACKEND_URL:=https://github.com/sub-store-org/Sub-Store/releases/latest/download/sub-store.bundle.js
@@ -38,26 +46,6 @@ SUBSTORE_FRONTEND_URL:=https://github.com/sub-store-org/Sub-Store-Front-End/rele
 WGET_OPTS:=--timeout=15 --tries=2 --waitretry=3
 
 include $(TOPDIR)/feeds/luci/luci.mk
-
-# $(1) = 目标文件路径, $(2) = 镜像URL, $(3) = 兜底URL, $(4) = 描述文字
-define DownloadWithFallback
-	echo "下载 $(4)（优先走自己的镜像）..."; \
-	if wget $(WGET_OPTS) -q -O "$(1)" "$(2)" && [ -s "$(1)" ]; then \
-		echo "$(4) 镜像下载成功"; \
-	else \
-		echo "镜像下载失败或为空，改用官方源重试: $(3)" >&2; \
-		if ! wget $(WGET_OPTS) -q -O "$(1)" "$(3)"; then \
-			echo "错误: $(4) 下载失败（镜像和官方源都不通）: $(3)" >&2; \
-			rm -f "$(1)"; \
-			exit 1; \
-		fi; \
-	fi; \
-	if [ ! -s "$(1)" ]; then \
-		echo "错误: $(4) 下载结果为空" >&2; \
-		rm -f "$(1)"; \
-		exit 1; \
-	fi
-endef
 
 define Package/luci-app-substore/install
 	$(INSTALL_DIR) $(1)/etc/init.d
@@ -69,7 +57,26 @@ define Package/luci-app-substore/install
 	$(INSTALL_BIN) ./root/usr/libexec/substore/update-backend.sh $(1)/usr/libexec/substore/update-backend.sh
 	$(INSTALL_BIN) ./root/usr/libexec/substore/update-frontend.sh $(1)/usr/libexec/substore/update-frontend.sh
 
-	$(call DownloadWithFallback,$(1)/usr/libexec/substore/sub-store.bundle.js,$(SUBSTORE_MIRROR_BACKEND_URL),$(SUBSTORE_BACKEND_URL),Sub-Store 后端 bundle)
+	echo "下载 Sub-Store 后端 bundle（优先走自己的镜像）..."; \
+	BACKEND_OUT="$(1)/usr/libexec/substore/sub-store.bundle.js"; \
+	OK=0; \
+	if wget $(WGET_OPTS) -q -O "$$BACKEND_OUT" "$(SUBSTORE_MIRROR_BACKEND_URL)" \
+	   && [ -s "$$BACKEND_OUT" ] \
+	   && ! head -c 200 "$$BACKEND_OUT" | grep -qi '<html\|<!DOCTYPE'; then \
+		echo "后端 bundle 镜像下载成功"; OK=1; \
+	else \
+		echo "镜像下载失败/内容不对，改用官方源重试: $(SUBSTORE_BACKEND_URL)" >&2; \
+		if wget $(WGET_OPTS) -q -O "$$BACKEND_OUT" "$(SUBSTORE_BACKEND_URL)" \
+		   && [ -s "$$BACKEND_OUT" ] \
+		   && ! head -c 200 "$$BACKEND_OUT" | grep -qi '<html\|<!DOCTYPE'; then \
+			OK=1; \
+		fi; \
+	fi; \
+	if [ "$$OK" != "1" ]; then \
+		echo "错误: 后端 bundle 下载失败（镜像和官方源都拿不到有效文件）" >&2; \
+		rm -f "$$BACKEND_OUT"; \
+		exit 1; \
+	fi
 
 	$(INSTALL_DIR) $(1)/usr/share/luci/menu.d
 	$(INSTALL_DATA) ./root/usr/share/luci/menu.d/luci-app-substore.json $(1)/usr/share/luci/menu.d/luci-app-substore.json
@@ -83,9 +90,28 @@ define Package/luci-app-substore/install
 	$(INSTALL_DATA) ./root/www/luci-static/resources/view/substore/cron.js $(1)/www/luci-static/resources/view/substore/cron.js
 
 	$(INSTALL_DIR) $(1)/www/sub-store
-	$(call DownloadWithFallback,/tmp/substore-dist-luci-app-substore.zip,$(SUBSTORE_MIRROR_FRONTEND_URL),$(SUBSTORE_FRONTEND_URL),Sub-Store 前端 dist)
-	unzip -q -o /tmp/substore-dist-luci-app-substore.zip -d $(1)/www/sub-store
-	rm -f /tmp/substore-dist-luci-app-substore.zip
+	echo "下载 Sub-Store 前端 dist（优先走自己的镜像）..."; \
+	FRONTEND_ZIP="/tmp/substore-dist-luci-app-substore.zip"; \
+	OK=0; \
+	if wget $(WGET_OPTS) -q -O "$$FRONTEND_ZIP" "$(SUBSTORE_MIRROR_FRONTEND_URL)" \
+	   && [ -s "$$FRONTEND_ZIP" ] \
+	   && unzip -tq "$$FRONTEND_ZIP" >/dev/null 2>&1; then \
+		echo "前端 dist 镜像下载成功"; OK=1; \
+	else \
+		echo "镜像下载失败/不是有效zip，改用官方源重试: $(SUBSTORE_FRONTEND_URL)" >&2; \
+		if wget $(WGET_OPTS) -q -O "$$FRONTEND_ZIP" "$(SUBSTORE_FRONTEND_URL)" \
+		   && [ -s "$$FRONTEND_ZIP" ] \
+		   && unzip -tq "$$FRONTEND_ZIP" >/dev/null 2>&1; then \
+			OK=1; \
+		fi; \
+	fi; \
+	if [ "$$OK" != "1" ]; then \
+		echo "错误: 前端 dist 下载失败（镜像和官方源都拿不到有效 zip）" >&2; \
+		rm -f "$$FRONTEND_ZIP"; \
+		exit 1; \
+	fi; \
+	unzip -q -o "$$FRONTEND_ZIP" -d $(1)/www/sub-store; \
+	rm -f "$$FRONTEND_ZIP"
 	if [ ! -f $(1)/www/sub-store/dist/index.html ]; then \
 		echo "错误: 解压后没找到 dist/index.html，前端包结构可能变了" >&2; \
 		exit 1; \
