@@ -12,7 +12,7 @@ function validateHost(value) {
 
 	if (v === '::' || v === '0.0.0.0' || v === '127.0.0.1') return true;
 
-	return _('监听地址只能是 ::（IPv4+IPv6 全部地址）、0.0.0.0（仅 IPv4 全部地址）或 127.0.0.1（仅本机），不支持自定义 IP');
+	return _('监听地址只能是 ::（IPv4+IPv6）、0.0.0.0（仅IPv4）或 127.0.0.1（仅本机）');
 }
 
 // 校验代理地址：必须以支持的协议开头，且后面有实际内容
@@ -40,7 +40,7 @@ return view.extend({
 		o.default = '3001';
 		o.datatype = 'port';
 
-		o = s.option(form.Value, 'frontend_host', _('监听地址'), _('只能填 ::（同时监听 IPv4/IPv6 全部地址）、0.0.0.0（仅 IPv4 全部地址）或 127.0.0.1（仅本机）'));
+		o = s.option(form.Value, 'frontend_host', _('监听地址'), _('::（同时监听 IPv4/IPv6）、0.0.0.0（仅 IPv4）、127.0.0.1（仅本机）'));
 		o.default = '::';
 		o.placeholder = '::';
 		o.validate = function(section_id, value) {
