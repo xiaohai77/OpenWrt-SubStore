@@ -82,6 +82,19 @@ define Package/luci-app-substore/install
 		exit 1; \
 	fi
 
+	# 2026-07 新增：记录当前装的后端对应哪个上游版本，供 LuCI 界面显示。
+	# 这里跟 update-backend.sh 是两条独立的记录路径：这里只管编译安装
+	# 这一刻的版本；一旦用户在面板里点了"更新后端"按钮，走的是
+	# update-backend.sh 自己的下载+记录逻辑，会覆盖掉这里写的值，两边
+	# 互不依赖、互不覆盖对方的时机。
+	# 用 { 命令; echo unknown } | head -n1 这种管道写法、不引入任何 $$临时
+	# 变量，是因为 Package/install 这个阶段的 recipe 会被多展开一轮，
+	# "$$VAR" 这种写法在第40行附近的历史备注里已经证实会被吃掉字符。
+	echo "记录后端版本号..."
+	{ wget $(WGET_OPTS) -qO- "https://api.github.com/repos/sub-store-org/Sub-Store/releases/latest" 2>/dev/null \
+	    | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n1; \
+	  echo unknown; } | head -n1 > $(1)/usr/libexec/substore/backend.version
+
 	$(INSTALL_DIR) $(1)/usr/share/luci/menu.d
 	$(INSTALL_DATA) ./root/usr/share/luci/menu.d/luci-app-substore.json $(1)/usr/share/luci/menu.d/luci-app-substore.json
 	$(INSTALL_DIR) $(1)/usr/share/rpcd/acl.d
@@ -110,6 +123,13 @@ define Package/luci-app-substore/install
 	fi
 	unzip -q -o /tmp/substore-dist-luci-app-substore.zip -d $(1)/www/sub-store
 	rm -f /tmp/substore-dist-luci-app-substore.zip
+
+	# 道理同后端：版本号在实际下载这一刻记录，跟 update-frontend.sh 用
+	# 同一套逻辑，不依赖 deploy.yml 里的缓存。
+	echo "记录前端版本号..."
+	{ wget $(WGET_OPTS) -qO- "https://api.github.com/repos/sub-store-org/Sub-Store-Front-End/releases/latest" 2>/dev/null \
+	    | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n1; \
+	  echo unknown; } | head -n1 > $(1)/usr/libexec/substore/frontend.version
 	if [ ! -f $(1)/www/sub-store/dist/index.html ]; then \
 		echo "错误: 解压后没找到 dist/index.html，前端包结构可能变了" >&2; \
 		exit 1; \
