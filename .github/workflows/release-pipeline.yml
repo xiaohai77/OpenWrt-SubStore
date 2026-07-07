@@ -58,33 +58,14 @@ jobs:
             git push
           fi
 
-      # 2026-07 新增：deploy.yml 现在除了发布签名的 ipk/apk 索引，还会把
-      # sub-store.bundle.js / dist.zip 镜像到 Cloudflare（供固件那边编译
-      # luci-app-substore 时优先下载，避免直连 GitHub Releases 卡死）。
-      #
-      # 这一步必须放在触发 ipk/apk 编译"之前"：如果放在编译之后（旧顺序），
-      # 编译时 Cloudflare 上还是上一轮缓存的旧版 bundle.js/dist.zip，新版本
-      # 要等这一轮编译完、deploy.yml 跑完才会出现——等于每次编译都慢一拍，
-      # 打包进去的其实是上一版内容。所以先跑一次 deploy.yml 把新版镜像预热
-      # 好，编译时才能真正拿到跟上游同步的新版本。
-      - name: Pre-warm Cloudflare asset mirror (before build)
-        if: steps.check.outputs.changed == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh workflow run deploy.yml
-          sleep 15
-          for i in $(seq 1 40); do
-            DEPLOY_STATUS=$(gh run list --workflow=deploy.yml --limit 1 --json status,conclusion --jq '.[0]')
-            DEPLOY_DONE=$(echo "$DEPLOY_STATUS" | jq -r '.status == "completed"')
-            echo "预热部署: $DEPLOY_STATUS"
-            if [ "$DEPLOY_DONE" = "true" ]; then
-              echo "预热部署完成"
-              break
-            fi
-            echo "预热部署还在跑，等待15秒..."
-            sleep 15
-          done
+      # 2026-07 修复：之前这里在触发 ipk/apk 编译前，要先手动跑一次
+      # deploy.yml 把 sub-store.bundle.js / dist.zip 预热到 Cloudflare，
+      # 是因为当时 Makefile 里编译期下载是"镜像优先、官方源兜底"——镜像不
+      # 提前刷新，编译时拿到的就是上一轮的旧内容。现在 Makefile 已经改成
+      # "官方源优先、镜像仅兜底"，编译期直接连 GitHub 官方源拿最新内容，
+      # 不再依赖 Cloudflare 镜像是否提前刷新，这一步预热+轮询也就不需要了。
+      # /assets/ 镜像仍然会在下面 deploy.yml 里刷新，只是不再需要抢在编译
+      # 之前完成。
 
       - name: Trigger IPK and APK builds
         if: steps.check.outputs.changed == 'true'
