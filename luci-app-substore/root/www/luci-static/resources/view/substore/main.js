@@ -147,22 +147,67 @@ function refreshRunningState(node) {
 	});
 }
 
-function runInitActionAndReload(action) {
-	return callInitAction('substore', action).then(function() {
+function waitForPanelReady(maxAttempts, intervalMs) {
+	var port = uci.get('substore', 'config', 'frontend_port') || '3001';
+	var url = 'http://' + window.location.hostname + ':' + port + '/';
+
+	function attempt(n) {
+		return fetch(url, { mode: 'no-cors', cache: 'no-store' }).then(function() {
+			return true;
+		}).catch(function() {
+			if (n <= 0) return false;
+			return new Promise(function(resolve) {
+				setTimeout(function() {
+					resolve(attempt(n - 1));
+				}, intervalMs);
+			});
+		});
+	}
+
+	return attempt(maxAttempts);
+}
+
+function afterActionReload(action) {
+	if (action === 'stop') {
+		window.location.reload();
+		return Promise.resolve();
+	}
+	return waitForPanelReady(10, 500).then(function() {
 		window.location.reload();
 	});
 }
 
+function runInitActionAndReload(action) {
+	return callInitAction('substore', action).then(function() {
+		return afterActionReload(action);
+	});
+}
+
+function suppressChangeIndicator() {
+	if (!ui.changes || typeof ui.changes.setIndicator !== 'function') {
+		return function() {};
+	}
+	var original = ui.changes.setIndicator;
+	ui.changes.setIndicator = function() {
+		return original.call(ui.changes, 0);
+	};
+	return function restore() {
+		ui.changes.setIndicator = original;
+	};
+}
+
 function toggleServiceAndReload(action) {
 	var newEnabled = (action === 'start') ? '1' : '0';
+	var restoreIndicator = suppressChangeIndicator();
+
 	uci.set('substore', 'config', 'enabled', newEnabled);
 
 	return uci.save().then(function() {
 		return uci.apply();
 	}).then(function() {
-		return callInitAction('substore', action);
-	}).then(function() {
-		window.location.reload();
+		return afterActionReload(action);
+	}).finally(function() {
+		restoreIndicator();
 	});
 }
 
@@ -294,10 +339,12 @@ return view.extend({
 			var btnRestart = node.querySelector('#btn_restart');
 			guardedClick(btnRestart, function() {
 				btnRestart.disabled = true;
+				btnRestart.style.color = '#e67e22';
 				btnRestart.textContent = '重启中...';
 				runInitActionAndReload('restart').catch(function() {
 					ui.addNotification(null, E('p', '重启失败。'), 'danger');
 					btnRestart.disabled = false;
+					btnRestart.style.color = '';
 					btnRestart.textContent = '重启服务';
 				});
 			});
@@ -307,10 +354,12 @@ return view.extend({
 				btnToggle.addEventListener('click', function() {
 					var action = btnToggle.textContent.indexOf('停止') !== -1 ? 'stop' : 'start';
 					btnToggle.disabled = true;
+					if (action === 'start') btnToggle.style.color = '#e67e22';
 					btnToggle.textContent = (action === 'stop') ? '停止中...' : '启动中...';
 					toggleServiceAndReload(action).catch(function() {
 						ui.addNotification(null, E('p', (action === 'stop' ? '停止' : '启动') + '失败。'), 'danger');
 						btnToggle.disabled = false;
+						btnToggle.style.color = '';
 						btnToggle.textContent = (action === 'stop') ? '停止服务' : '启动服务';
 					});
 				});
@@ -361,14 +410,4 @@ return view.extend({
 			return node;
 		});
 	},
-
-	handleSaveApply: function(ev) {
-		return this.super('handleSaveApply', [ev]).then(function() {
-			var action = isServiceEnabled() ? 'restart' : 'stop';
-			return callInitAction('substore', action).catch(function() {
-			}).then(function() {
-				window.location.reload();
-			});
-		});
-	}
 });
