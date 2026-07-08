@@ -8,8 +8,10 @@ chmod +x /etc/init.d/substore
 
 echo "Sub-Store installed."
 
-rm -f /tmp/luci-indexcache* >/dev/null 2>&1
-rm -rf /tmp/luci-modulecache/* >/dev/null 2>&1
+rm -f /tmp/luci-indexcache* 2>/dev/null
+rm -f /tmp/luci-modulecache/* 2>/dev/null
+rm -f /tmp/luci-indexcache 2>/dev/null
+
 /etc/init.d/rpcd reload >/dev/null 2>&1
 
 exit 0
