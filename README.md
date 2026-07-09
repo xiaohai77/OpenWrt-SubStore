@@ -1,1 +1,246 @@
 # luci-app-substore
+
+在 OpenWrt / LibWrt 路由器上一键部署 [Sub-Store](https://github.com/sub-store-org/Sub-Store) 订阅管理后端，并提供完整的 LuCI 图形化管理界面——启动/停止、版本查看、一键更新、定时任务、数据备份恢复等全部在网页上完成，不用手动敲命令、不用自己下 bundle、不用自己写 init 脚本。
+
+<!--
+  === 在这里放项目截图 ===
+  把截图文件放进仓库根目录的 screenshots/ 文件夹，比如 screenshots/main.png、screenshots/network.png，
+  然后把下面这行的路径改成对应文件名即可，多张图可以照着这个格式往下加。
+  上传完文件、改好路径之后把这行注释删掉。
+-->
+![主页截图](./screenshots/main.png)
+
+---
+
+## 目录
+
+- [功能特性](#功能特性)
+- [系统要求](#系统要求)
+- [安装方法](#安装方法)
+- [快速上手](#快速上手)
+- [LuCI 页面说明](#luci-页面说明)
+- [配置项详解](#配置项详解)
+- [多源回退下载机制](#多源回退下载机制)
+- [目录结构](#目录结构)
+- [CI/CD 流水线](#cicd-流水线)
+- [常见问题 FAQ](#常见问题-faq)
+- [从源码构建](#从源码构建)
+- [已知限制](#已知限制)
+- [License](#license)
+
+---
+
+## 功能特性
+
+- 📦 **零配置安装**：装完包默认自带可用配置，开箱即用
+- 🖥 **图形化管理**：启动/停止、重启、查看运行状态、查看后端/前端版本，全部在 LuCI 网页里点按钮完成
+- 🔄 **一键更新**：后端 / 前端可分别单独更新，自动依次尝试「加速代理 → 自建镜像 → GitHub 官方源」，哪个通用哪个，不用手动判断网络环境
+- ⏰ **定时任务**：订阅同步、数据备份、数据恢复、订阅预处理均支持 cron 定时，网页里带格式校验，写错了会直接提示
+- 💾 **数据恢复**：支持路由器重启/重装后从 Gist 等远程地址自动拉取数据恢复
+- 🌍 **多架构支持**：LuCI 部分为纯 Lua/JS（`arch:all`），后端依赖 Node.js，跟随 OpenWrt 官方 `node` 软件包支持的架构范围
+- 🔐 **签名软件源**：ipk（usign）、apk（EC prime256v1）均为签名发布，走 `opkg`/`apk` 正常源安装，不是裸装未签名包
+
+---
+
+## 系统要求
+
+| 项目 | 要求 |
+|---|---|
+| OpenWrt 版本 | 21.02 及以上（依赖新版 LuCI JS 前端框架 `ui.js`/`view.extend`，**不支持纯 Lua 老版 LuCI**，具体见 [常见问题](#常见问题-faq)） |
+| 包管理器 | `opkg`（OpenWrt 24.10 及更早）或 `apk`（OpenWrt 25.12 及以后），二选一，安装脚本会自动识别 |
+| 依赖软件包 | `node`（运行 Sub-Store 后端）、`unzip`（解压前端静态文件），装包时 opkg/apk 会自动一并装上 |
+| 存储空间 | 建议预留 30MB 以上可用空间（node 运行时 + 后端 bundle + 前端静态资源） |
+| 内存 | 128MB 及以上机型可正常运行，跑大量订阅/规则集时建议 256MB 以上 |
+
+---
+
+## 安装方法
+
+### 方式一：一键脚本（推荐）
+
+SSH 登录路由器执行：
+
+```sh
+wget -O /tmp/install.sh https://substore-openwrt.445568.xyz/install.sh && sh /tmp/install.sh
+```
+
+脚本会自动判断路由器用的是 `opkg` 还是 `apk`，导入签名公钥、添加对应软件源、安装 `luci-app-substore`。
+
+### 方式二：手动添加软件源
+
+**OpenWrt 24.10 及更早（opkg）：**
+
+```sh
+wget -O /tmp/substore-ipk.pub https://substore-openwrt.445568.xyz/substore-ipk.pub
+opkg-key add /tmp/substore-ipk.pub
+echo "src/gz substore https://substore-openwrt.445568.xyz/openwrt-23.05/all" > /etc/opkg/substore.conf
+opkg update
+opkg install luci-app-substore
+```
+
+**OpenWrt 25.12 及以后（apk）：**
+
+```sh
+wget -O /etc/apk/keys/substore-apk.pem https://substore-openwrt.445568.xyz/substore-apk.pem
+mkdir -p /etc/apk/repositories.d
+echo "https://substore-openwrt.445568.xyz/openwrt-25.12/all/packages.adb" > /etc/apk/repositories.d/substore.list
+apk update
+apk add luci-app-substore
+```
+
+### 方式三：LuCI 网页手动上传 ipk/apk
+
+在 [substore-openwrt.445568.xyz](https://substore-openwrt.445568.xyz) 对应架构目录下载 ipk/apk 文件，LuCI → 系统 → 软件包 → 上传安装。
+
+---
+
+## 快速上手
+
+1. 装完包后，服务默认已启用（`enabled '1'`）并自动启动
+2. 打开 LuCI → 服务 → **Sub-Store**
+3. 「服务状态」标签页可以看到运行状态、后端/前端版本号，点「打开 Sub-Store」直接跳转到订阅管理网页
+4. 如果需要修改端口、监听地址、代理等，去对应标签页改完点保存即可，改完配置会自动重启生效
+
+---
+
+## LuCI 页面说明
+
+| 页面 | 对应文件 | 功能 |
+|---|---|---|
+| 服务状态 | `main.js` | 启动/停止/重启、后端与前端版本显示（多源回退检测最新版本）、一键更新、打开面板入口 |
+| 基础设置 | `main.js` | 数据目录、实例名称、后端 API 路径前缀 |
+| 端口与网络 | `network.js` | 监听端口、监听地址（`::` / `0.0.0.0` / `127.0.0.1`）、默认代理 |
+| 定时任务 | `cron.js` | 订阅同步、数据备份、数据恢复、订阅预处理，均为 cron 表达式并带格式校验 |
+| 数据恢复 | `recovery.js` | 启动时从远程 URL（如 Gist Raw）拉取数据、拉取后执行的 JS 表达式 |
+| 高级设置 | `advanced.js` | 自定义图标、`X-Powered-By`、CORS 允许来源、最大 Header 大小、Body 大小限制、推送服务 URL |
+
+---
+
+## 配置项详解
+
+配置文件位于 `/etc/config/substore`，对应 UCI section `config`：
+
+| 字段 | 默认值 | 说明 |
+|---|---|---|
+| `enabled` | `1` | 是否启用服务 |
+| `frontend_port` | `3001` | 服务监听端口（前后端合并单端口模式） |
+| `frontend_host` | `::` | 监听地址：`::` 同时监听 IPv4/IPv6，`0.0.0.0` 仅 IPv4，`127.0.0.1` 仅本机 |
+| `frontend_backend_path` | `/sub-store-api` | 后端 API 路径前缀 |
+| `data_dir` | `/etc/sub-store` | 数据文件存放目录 |
+| `backend_custom_name` | `OpenWrt` | 前端界面显示的后端实例名称 |
+| `backend_custom_icon` | 空 | 前端界面显示的后端图标 URL |
+| `backend_sync_cron` | 空 | 订阅同步到 Gist 的 cron 定时 |
+| `backend_upload_cron` | 空 | 数据备份到 Gist 的 cron 定时 |
+| `backend_download_cron` | 空 | 从 Gist 恢复数据的 cron 定时 |
+| `produce_cron` | 空 | 订阅/组合预处理定时，格式：`cron表达式,类型,名称`，类型为 `sub` 或 `col`，多条用 `;` 分隔 |
+| `push_service` | 空 | 推送通知服务 URL，支持 `[推送标题]`/`[推送内容]` 占位符 |
+| `cors_allowed_origins` | `*` | 允许访问后端 API 的浏览器来源 |
+| `backend_default_proxy` | 空 | 抓取订阅时使用的默认代理，支持 `http://`/`https://`/`socks5://` |
+| `max_header_size` | `32768` | 最大请求头大小（字节） |
+| `body_json_limit` | `1mb` | 请求体大小限制 |
+| `x_powered_by` | 空 | 自定义 `X-Powered-By` 响应头 |
+| `data_url` | 空 | 启动时拉取恢复数据的远程地址 |
+| `data_url_post` | 空 | 拉取数据后执行的 JS 表达式 |
+
+---
+
+## 多源回退下载机制
+
+无论是构建期（打包 ipk/apk 时）还是运行期（网页点「更新」按钮），下载后端 bundle / 前端 dist 都遵循同一套回退逻辑，尽量保证在各种网络环境下都能装上/更新成功：
+
+- **构建期**（GitHub Actions 打包时）：官方 GitHub Release → 自建 Cloudflare Pages 镜像，两级回退，失败则整个构建中止，不产出坏包
+- **运行期**（LuCI 网页点更新）：加速代理 → 自建 Cloudflare Pages 镜像 → GitHub 官方源，三级回退，逐个尝试直到成功，方便被墙环境下也能正常更新
+
+每一级下载完都会做基本的内容校验（zip 文件头 magic bytes 校验、HTML 错误页嗅探），避免把网关返回的错误页当成正常安装包用。
+
+---
+
+## 目录结构
+
+```
+luci-app-substore/
+├── Makefile                          # 打包规则：下载 bundle/dist、安装文件到镜像
+├── root/
+│   ├── etc/
+│   │   ├── config/substore           # 默认 UCI 配置
+│   │   └── init.d/substore           # procd 服务脚本
+│   ├── usr/
+│   │   ├── libexec/substore/
+│   │   │   ├── postinstall.sh        # 装包后置脚本
+│   │   │   ├── update-backend.sh     # 后端更新脚本（多源回退）
+│   │   │   └── update-frontend.sh    # 前端更新脚本（多源回退）
+│   │   └── share/
+│   │       ├── luci/menu.d/          # LuCI 声明式菜单注册
+│   │       └── rpcd/acl.d/           # rpcd 权限声明
+│   └── www/luci-static/resources/view/substore/
+│       ├── main.js                   # 服务状态 + 基础设置
+│       ├── network.js                # 端口与网络
+│       ├── cron.js                   # 定时任务
+│       ├── recovery.js               # 数据恢复
+│       └── advanced.js               # 高级设置
+├── keys/
+│   └── ipk-sign.pub                  # ipk 签名公钥
+└── scripts/
+    └── install.sh                    # 一键安装脚本
+```
+
+---
+
+## CI/CD 流水线
+
+`.github/workflows/` 下共 4 个工作流，串联成完整的发布流水线：
+
+1. **`substore-ipk.yml`** —— 多架构编译打包 ipk（opkg 用），签名后作为 GitHub Release 附件发布
+2. **`substore-apk.yml`** —— 多架构编译打包 apk（OpenWrt 25.12+ 用），签名后发布为独立 Release（tag 带 `-apk` 后缀区分）
+3. **`release-pipeline.yml`** —— 定时/手动触发总入口，依次拉起 ipk 和 apk 两个构建工作流，等待完成后触发部署
+4. **`deploy.yml`** —— 从最新的 ipk / apk Release 中取出产物，生成签名索引（`Packages`/`Packages.gz`/`packages.adb`），部署到 Cloudflare Pages（`substore-openwrt.445568.xyz`），同时更新 `backend-version.txt`/`frontend-version.txt` 供 LuCI 前端和运行期更新脚本读取镜像上的最新版本号
+
+---
+
+## 常见问题 FAQ
+
+**Q: 装完之后 LuCI 服务菜单里找不到 Sub-Store？**
+A: 先确认 OpenWrt 版本，本插件的前端是纯 JS 视图（`view.extend` + `menu.d` 声明式菜单），**只支持 21.02 及以后带新版 LuCI JS 框架的系统**。如果是更早的纯 Lua LuCI（没有 `ui.js`/`rpc.js`），菜单不会显示，也没法简单适配，建议升级固件版本。菜单不显示但确认是新版 LuCI 的，先清一下缓存重新登录：
+```sh
+rm -f /tmp/luci-indexcache*
+rm -rf /tmp/luci-modulecache/
+killall -HUP rpcd
+```
+
+**Q: 点「打开 Sub-Store」链接打不开？**
+A: 检查「端口与网络」里的监听地址，如果设成了 `127.0.0.1`（仅本机），只有路由器本机能访问，局域网内其它设备打开会连不上，改成 `::` 或 `0.0.0.0` 即可。
+
+**Q: 订阅预处理定时（`produce_cron`）里能不能用逗号列表写法，比如 `0,30 * * * *`？**
+A: 目前不行。`produce_cron` 本身用逗号分隔「cron表达式,类型,名称」三段，如果 cron 表达式内部也带逗号会被拆错，这是已知限制，建议改用 `*/30` 这种写法代替逗号列表。
+
+**Q: 装包后服务没有自动启动？**
+A: 正常情况下 `postinstall.sh` 会在装包时直接执行 `/etc/init.d/substore start`，如果确实没起来，去「服务状态」页面手动点一次「启动服务」，或者检查 `logread | grep substore` 看有没有报错。
+
+---
+
+## 从源码构建
+
+需要 OpenWrt SDK 或完整源码树：
+
+```sh
+git clone https://github.com/xiaohai77/OpenWrt-SubStore.git package/luci-app-substore
+cd <openwrt源码目录>
+make menuconfig   # LuCI -> Applications -> luci-app-substore 打勾
+make package/luci-app-substore/compile V=s
+```
+
+构建过程会联网下载 Sub-Store 官方 Release 的后端 bundle 和前端 dist，请确保编译环境能访问 GitHub（或者自行把 `Makefile` 里的 `SUBSTORE_MIRROR_*_URL` 改成你自己的可用镜像地址）。
+
+---
+
+## 已知限制
+
+- 不支持老版本纯 Lua LuCI（无 JS 框架的版本），详见 FAQ
+- 「更新后端」「更新前端」按钮点击后会同步等待下载完成，网络差时页面会有几秒到十几秒的等待，属正常现象
+- `produce_cron` 暂不支持 cron 表达式内部的逗号列表写法
+
+---
+
+## License
+
+GPL-3.0
