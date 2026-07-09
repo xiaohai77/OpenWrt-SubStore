@@ -2,13 +2,9 @@
 
 在 OpenWrt / LibWrt 路由器上一键部署 [Sub-Store](https://github.com/sub-store-org/Sub-Store) 订阅管理后端，并提供完整的 LuCI 图形化管理界面——启动/停止、版本查看、一键更新、定时任务、数据备份恢复等全部在网页上完成，不用手动敲命令、不用自己下 bundle、不用自己写 init 脚本。
 
-<!--
-  === 在这里放项目截图 ===
-  把截图文件放进仓库根目录的 screenshots/ 文件夹，比如 screenshots/main.png、screenshots/network.png，
-  然后把下面这行的路径改成对应文件名即可，多张图可以照着这个格式往下加。
-  上传完文件、改好路径之后把这行注释删掉。
--->
-![主页截图](./screenshots/Sub-Store.png)
+<p align="center">
+  <img src="./screenshots/Sub-Store.png" alt="Sub-Store LuCI 页面" width="700">
+</p>
 
 ---
 
