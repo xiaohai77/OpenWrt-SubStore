@@ -105,6 +105,10 @@ define Package/luci-app-substore/install
 	fi
 endef
 
+define Package/luci-app-substore/conffiles
+/etc/config/substore
+endef
+
 define Package/luci-app-substore/postinst
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
