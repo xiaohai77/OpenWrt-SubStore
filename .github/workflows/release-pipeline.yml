@@ -10,9 +10,16 @@ on:
         type: boolean
         default: false
 
+concurrency:
+  group: substore-release-pipeline
+  cancel-in-progress: false
+
 jobs:
   check-and-release:
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      actions: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,34 +63,40 @@ jobs:
             git push
           fi
 
+      - name: Resolve shared version
+        if: steps.check.outputs.changed == 'true'
+        id: ver
+        run: |
+          VERSION="2.9.${{ github.run_number }}"
+          echo "本次统一版本号: $VERSION（IPK / APK 会使用同一个版本号，不再各自计数）"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Trigger IPK and APK builds
         if: steps.check.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh workflow run substore-ipk.yml
-          gh workflow run substore-apk.yml
-          sleep 15
+          gh workflow run substore-ipk.yml -f version="${{ steps.ver.outputs.version }}"
+          gh workflow run substore-apk.yml -f version="${{ steps.ver.outputs.version }}"
+          sleep 10
 
-      - name: Wait for both builds to finish
+      - name: Wait for IPK build
         if: steps.check.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          for i in $(seq 1 60); do
-            IPK_STATUS=$(gh run list --workflow=substore-ipk.yml --limit 1 --json status,conclusion --jq '.[0]')
-            APK_STATUS=$(gh run list --workflow=substore-apk.yml --limit 1 --json status,conclusion --jq '.[0]')
-            IPK_DONE=$(echo "$IPK_STATUS" | jq -r '.status == "completed"')
-            APK_DONE=$(echo "$APK_STATUS" | jq -r '.status == "completed"')
-            echo "IPK: $IPK_STATUS"
-            echo "APK: $APK_STATUS"
-            if [ "$IPK_DONE" = "true" ] && [ "$APK_DONE" = "true" ]; then
-              echo "两个编译都完成了"
-              break
-            fi
-            echo "还在编译中，等待30秒..."
-            sleep 30
-          done
+          run_id=$(gh run list --workflow=substore-ipk.yml --limit 1 --json databaseId --jq '.[0].databaseId')
+          echo "IPK run id: $run_id"
+          gh run watch "$run_id" --exit-status
+
+      - name: Wait for APK build
+        if: steps.check.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          run_id=$(gh run list --workflow=substore-apk.yml --limit 1 --json databaseId --jq '.[0].databaseId')
+          echo "APK run id: $run_id"
+          gh run watch "$run_id" --exit-status
 
       - name: Trigger deploy to Cloudflare (publish build artifacts)
         if: steps.check.outputs.changed == 'true'

@@ -20,7 +20,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG=$(gh api repos/${{ github.repository }}/releases --jq '[.[] | select(.tag_name | endswith("-apk") | not)] | sort_by(.created_at) | last | .tag_name')
+          TAG=$(gh api repos/${{ github.repository }}/releases --jq '[.[] | select(.tag_name | endswith("-ipk"))] | sort_by(.created_at) | last | .tag_name')
           echo "IPK_TAG=$TAG" >> $GITHUB_ENV
           echo "IPK tag: $TAG"
 
@@ -48,11 +48,12 @@ jobs:
 
       - name: Download OpenWrt SDK (for usign + apk host tools)
         run: |
-          wget -q "https://downloads.openwrt.org/releases/23.05.3/targets/x86/64/openwrt-sdk-23.05.3-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz" -O sdk-ipk.tar.xz
-          tar -xf sdk-ipk.tar.xz
+          sudo apt-get install -y zstd
+
+          wget -q "https://downloads.openwrt.org/releases/24.10.7/targets/x86/64/openwrt-sdk-24.10.7-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst" -O sdk-ipk.tar.zst
+          tar --zstd -xf sdk-ipk.tar.zst
           mv openwrt-sdk-* sdk-ipk
 
-          sudo apt-get install -y zstd
           wget -q "https://downloads.openwrt.org/releases/25.12.4/targets/x86/64/openwrt-sdk-25.12.4-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst" -O sdk-apk.tar.zst
           tar --zstd -xf sdk-apk.tar.zst
           mv openwrt-sdk-* sdk-apk

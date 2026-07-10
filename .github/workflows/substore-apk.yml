@@ -2,6 +2,11 @@ name: luci-app-substore-apk
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "统一版本号（由 release-pipeline 传入，留空则自动生成）"
+        required: false
+        type: string
 
 jobs:
   build:
@@ -13,14 +18,26 @@ jobs:
         with:
           path: src
 
-      - name: Auto increment package release
+      - name: Resolve version
+        id: ver
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="2.9.${{ github.run_number }}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "本次构建版本号: $VERSION"
+
+      - name: Set package version
         run: |
           if [ -f src/luci-app-substore/Makefile ]; then
-            sed -i 's/PKG_RELEASE:=.*/PKG_RELEASE:=${{ github.run_number }}/g' src/luci-app-substore/Makefile
-            echo "Successfully updated PKG_RELEASE to: ${{ github.run_number }}"
-            grep "PKG_RELEASE:=" src/luci-app-substore/Makefile
+            sed -i "s/PKG_VERSION:=.*/PKG_VERSION:=${{ steps.ver.outputs.version }}/g" src/luci-app-substore/Makefile
+            echo "Successfully updated PKG_VERSION to: ${{ steps.ver.outputs.version }}"
+            grep "PKG_VERSION:=" src/luci-app-substore/Makefile
           else
             echo "Warning: Makefile not found in src/ directory!"
+            exit 1
           fi
 
       - name: Install dependencies
@@ -70,7 +87,7 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v2.9.${{ github.run_number }}-apk
+          tag_name: v${{ steps.ver.outputs.version }}-apk
           name: luci-app-substore (apk)
           files: output/*.apk
         env:

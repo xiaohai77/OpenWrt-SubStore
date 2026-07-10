@@ -2,6 +2,11 @@ name: luci-app-substore-ipk
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "统一版本号（由 release-pipeline 传入，留空则自动生成）"
+        required: false
+        type: string
 
 jobs:
   build:
@@ -13,25 +18,37 @@ jobs:
         with:
           path: src
 
-      - name: Auto increment package version
+      - name: Resolve version
+        id: ver
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="2.9.${{ github.run_number }}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "本次构建版本号: $VERSION"
+
+      - name: Set package version
         run: |
           if [ -f src/luci-app-substore/Makefile ]; then
-            sed -i 's/PKG_VERSION:=.*/PKG_VERSION:=2.9.${{ github.run_number }}/g' src/luci-app-substore/Makefile
-            echo "Successfully updated PKG_VERSION to: 2.9.${{ github.run_number }}"
+            sed -i "s/PKG_VERSION:=.*/PKG_VERSION:=${{ steps.ver.outputs.version }}/g" src/luci-app-substore/Makefile
+            echo "Successfully updated PKG_VERSION to: ${{ steps.ver.outputs.version }}"
             grep "PKG_VERSION:=" src/luci-app-substore/Makefile
           else
             echo "Warning: Makefile not found in src/ directory!"
+            exit 1
           fi
 
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libncurses5-dev zlib1g-dev gawk git gettext libssl-dev xsltproc wget unzip python3
+          sudo apt-get install -y build-essential libncurses5-dev zlib1g-dev gawk git gettext libssl-dev xsltproc wget unzip python3 zstd
 
       - name: Download OpenWrt SDK
         run: |
-          wget -q "https://downloads.openwrt.org/releases/23.05.3/targets/x86/64/openwrt-sdk-23.05.3-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz" -O sdk.tar.xz
-          tar -xf sdk.tar.xz
+          wget -q "https://downloads.openwrt.org/releases/24.10.7/targets/x86/64/openwrt-sdk-24.10.7-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst" -O sdk.tar.zst
+          tar --zstd -xf sdk.tar.zst
           mv openwrt-sdk-* openwrt-sdk
 
       - name: Setup feeds
@@ -71,8 +88,8 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v2.9.${{ github.run_number }}
-          name: luci-app-substore
+          tag_name: v${{ steps.ver.outputs.version }}-ipk
+          name: luci-app-substore (ipk)
           files: output/*.ipk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
