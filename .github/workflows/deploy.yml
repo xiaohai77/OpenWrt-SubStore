@@ -70,7 +70,7 @@ jobs:
           echo "${{ secrets.IPK_SIGN_KEY }}" > /tmp/ipk-sign.key
           USIGN_BIN=$(find sdk-ipk -type f -name usign -path "*/host/bin/*" | head -n1)
 
-          REPO_DIR=site/openwrt-23.05/all
+          REPO_DIR=site/openwrt-24.10/all
           mkdir -p "$REPO_DIR"
           cp ipk-download/*.ipk "$REPO_DIR/"
           cd "$REPO_DIR"
@@ -175,7 +175,7 @@ jobs:
           /openwrt-25.12/*
             Cache-Control: no-cache, no-store, must-revalidate
 
-          /openwrt-23.05/*
+          /openwrt-24.10/*
             Cache-Control: no-cache, no-store, must-revalidate
 
           /assets/*
