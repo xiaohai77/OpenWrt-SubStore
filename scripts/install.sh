@@ -29,7 +29,7 @@ elif [ -x /bin/opkg ]; then
     rm -f /tmp/substore-ipk.pub
 
     echo "添加软件源..."
-    echo "src/gz substore $REPO_URL/openwrt-23.05/all" > /etc/opkg/substore.conf
+    echo "src/gz substore $REPO_URL/openwrt-24.10/all" > /etc/opkg/substore.conf
 
     echo "更新索引..."
     opkg update || true
