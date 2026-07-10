@@ -9,7 +9,7 @@
 <img width="200" src="./screenshots/Sub-Store.png" alt="luci-app-substore">
 <br>
 <br>
-<h2 align="center">luci-app-substore</h2>
+<h2 align="center">SubStore</h2>
 </div>
 
 <p align="center" color="#6a737d">
