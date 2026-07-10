@@ -7,6 +7,14 @@ on:
         description: "统一版本号（由 release-pipeline 传入，留空则自动生成）"
         required: false
         type: string
+      backend_tag:
+        description: "Sub-Store 后端版本号（由 release-pipeline 传入，留空则构建时自行查询）"
+        required: false
+        type: string
+      frontend_tag:
+        description: "Sub-Store 前端版本号（由 release-pipeline 传入，留空则构建时自行查询）"
+        required: false
+        type: string
 
 jobs:
   build:
@@ -63,10 +71,15 @@ jobs:
           ls openwrt-sdk/package/luci-app-substore/
 
       - name: Build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd openwrt-sdk
           make defconfig
-          if ! make package/luci-app-substore/compile V=s > build.log 2>&1; then
+          if ! make package/luci-app-substore/compile V=s \
+              SUBSTORE_BACKEND_TAG="${{ inputs.backend_tag }}" \
+              SUBSTORE_FRONTEND_TAG="${{ inputs.frontend_tag }}" \
+              > build.log 2>&1; then
             echo "=== 编译失败，日志最后 150 行 ==="
             tail -150 build.log
             exit 1

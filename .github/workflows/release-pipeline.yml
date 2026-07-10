@@ -26,9 +26,13 @@ jobs:
 
       - name: Check upstream versions (backend + frontend)
         id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          BACKEND_LATEST=$(curl -s https://api.github.com/repos/sub-store-org/Sub-Store/releases/latest | jq -r .tag_name)
-          FRONTEND_LATEST=$(curl -s https://api.github.com/repos/sub-store-org/Sub-Store-Front-End/releases/latest | jq -r .tag_name)
+          # 带上 GITHUB_TOKEN 认证请求，未认证调用 api.github.com 限额只有 60次/小时，
+          # 而这一条流水线一次发布要连续调好几轮，很容易撞上限流，认证后限额提到 5000次/小时。
+          BACKEND_LATEST=$(curl -s -H "Authorization: token $GH_TOKEN" https://api.github.com/repos/sub-store-org/Sub-Store/releases/latest | jq -r .tag_name)
+          FRONTEND_LATEST=$(curl -s -H "Authorization: token $GH_TOKEN" https://api.github.com/repos/sub-store-org/Sub-Store-Front-End/releases/latest | jq -r .tag_name)
 
           BACKEND_CACHED=$(cat .last-substore-backend-version 2>/dev/null || echo "none")
           FRONTEND_CACHED=$(cat .last-substore-frontend-version 2>/dev/null || echo "none")
@@ -71,7 +75,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           SINCE=$(date -u -d '-30 seconds' +%Y-%m-%dT%H:%M:%SZ)
-          gh workflow run substore-ipk.yml -f version="${{ steps.ver.outputs.version }}"
+          gh workflow run substore-ipk.yml \
+            -f version="${{ steps.ver.outputs.version }}" \
+            -f backend_tag="${{ steps.check.outputs.backend_latest }}" \
+            -f frontend_tag="${{ steps.check.outputs.frontend_latest }}"
 
           run_id=""
           for i in $(seq 1 24); do
@@ -106,7 +113,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           SINCE=$(date -u -d '-30 seconds' +%Y-%m-%dT%H:%M:%SZ)
-          gh workflow run substore-apk.yml -f version="${{ steps.ver.outputs.version }}"
+          gh workflow run substore-apk.yml \
+            -f version="${{ steps.ver.outputs.version }}" \
+            -f backend_tag="${{ steps.check.outputs.backend_latest }}" \
+            -f frontend_tag="${{ steps.check.outputs.frontend_latest }}"
 
           run_id=""
           for i in $(seq 1 24); do
