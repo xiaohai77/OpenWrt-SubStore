@@ -13,7 +13,7 @@
 </div>
 
 <p align="center" color="#6a737d">
-在 OpenWrt / LibWrt 路由器上一键安装 <a href="https://github.com/sub-store-org/Sub-Store">Sub-Store</a> 订阅管理后端，并提供完整的 LuCI 图形化管理界面——启动/停止、版本查看、一键更新、定时任务、数据备份恢复等全部在网页上完成，不用手动敲命令、不用自己下 bundle、不用自己写 init 脚本。
+在 OpenWrt / LibWrt 路由器上一键安装 <a href="https://github.com/sub-store-org/Sub-Store">Sub-Store</a> 订阅管理后端，并提供完整的 LuCI 图形化管理界面——启动/停止、版本查看、一键更新、定时任务、数据备份恢复等。
 </p>
 
 ---
