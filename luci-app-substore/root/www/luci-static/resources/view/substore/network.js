@@ -40,7 +40,7 @@ return view.extend({
 		o.default = '3001';
 		o.datatype = 'port';
 
-		o = s.option(form.Value, 'frontend_host', _('监听地址'), _('::（同时监听 IPv4/IPv6）、0.0.0.0（仅 IPv4）、127.0.0.1（仅本机）'));
+		o = s.option(form.Value, 'frontend_host', _('监听地址'), _('::（同时监听 IPv4/IPv6）、0.0.0.0（仅 IPv4）'));
 		o.default = '::';
 		o.placeholder = '::';
 		o.validate = function(section_id, value) {
