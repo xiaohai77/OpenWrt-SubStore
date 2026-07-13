@@ -176,10 +176,17 @@ function waitForPanelReady(maxAttempts, intervalMs) {
 	return attempt(maxAttempts);
 }
 
+function waitForApplySettle(ms) {
+	return new Promise(function(resolve) {
+		setTimeout(resolve, ms || 2000);
+	});
+}
+
 function afterActionReload(action) {
 	if (action === 'stop') {
-		window.location.reload();
-		return Promise.resolve();
+		return waitForApplySettle(1500).then(function() {
+			window.location.reload();
+		});
 	}
 	return waitForPanelReady(10, 500).then(function() {
 		window.location.reload();
