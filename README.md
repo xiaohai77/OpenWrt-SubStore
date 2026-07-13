@@ -1,11 +1,7 @@
 <div align="center">
 <br>
 <!--
-  === 在这里放项目 Logo/截图 ===
-  把图片文件放进仓库根目录的 screenshots/ 文件夹（比如 screenshots/logo.png），
-  上传完之后把下面 src 里的路径改成对应文件名，宽度可以按需调整 width 数值。
-  也可以像 Sub-Store 官方那样直接用 raw.githubusercontent.com 的链接。
--->
+  === Logo/截图 ===
 <img width="200" src="./screenshots/Sub-Store.png" alt="luci-app-substore">
 <br>
 <br>
@@ -38,7 +34,6 @@
 - ⏰ **定时任务**：订阅同步、数据备份、数据恢复、订阅预处理均支持 cron 定时
 - 💾 **数据恢复**：支持路由器重启/重装后从 Gist 等远程地址自动拉取数据恢复
 - 🌍 **多架构支持**：LuCI 部分为纯 Lua/JS（`arch:all`），后端依赖 Node.js，跟随 OpenWrt 官方 `node` 软件包支持的架构范围
-- 🔐 **签名软件源**：ipk（usign）、apk（EC prime256v1）均为签名发布，走 `opkg`/`apk` 正常源安装，不是裸装未签名包
 
 ---
 
