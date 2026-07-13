@@ -1,5 +1,5 @@
 config substore 'config'
-	option enabled '1'
+	option enabled '0'
 	option frontend_port '3001'
 	option frontend_host '::'
 	option frontend_backend_path '/sub-store-api'
