@@ -159,3 +159,28 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh workflow run pages-deploy.yml
+
+      - name: Cleanup old releases (只留最新 2 个 ipk + 最新 2 个 apk)
+        if: steps.check.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cleanup_suffix() {
+            suffix="$1"
+            old_tags=$(gh api "repos/${{ github.repository }}/releases" --paginate \
+              --jq "[.[] | select(.tag_name | endswith(\"$suffix\"))] | sort_by(.created_at) | reverse | .[2:] | .[].tag_name")
+
+            if [ -z "$old_tags" ]; then
+              echo "没有需要清理的 *${suffix} release"
+              return
+            fi
+
+            echo "$old_tags" | while read -r tag; do
+              [ -z "$tag" ] && continue
+              echo "删除旧 release: $tag"
+              gh release delete "$tag" --yes --cleanup-tag || echo "删除 $tag 失败，跳过"
+            done
+          }
+
+          cleanup_suffix "-ipk"
+          cleanup_suffix "-apk"
