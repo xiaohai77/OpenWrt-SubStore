@@ -62,44 +62,6 @@ jobs:
           echo "本次统一版本号: $VERSION（跟着下一次 pages-deploy.yml 的运行序号走）"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Trigger IPK build
-        if: steps.check.outputs.changed == 'true'
-        id: trigger_ipk
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          SINCE=$(date -u -d '-30 seconds' +%Y-%m-%dT%H:%M:%SZ)
-          gh workflow run substore-ipk.yml \
-            -f version="${{ steps.ver.outputs.version }}" \
-            -f backend_tag="${{ steps.check.outputs.backend_latest }}" \
-            -f frontend_tag="${{ steps.check.outputs.frontend_latest }}"
-
-          run_id=""
-          for i in $(seq 1 24); do
-            sleep 5
-            run_id=$(gh run list --workflow=substore-ipk.yml --json databaseId,createdAt,event \
-              --jq "[.[] | select(.event==\"workflow_dispatch\" and .createdAt >= \"$SINCE\")] | sort_by(.createdAt) | .[0].databaseId // empty")
-            if [ -n "$run_id" ]; then
-              echo "定位到本次触发的 IPK run: $run_id"
-              break
-            fi
-            echo "还没找到本次触发的 IPK run，重试中...（第 $i 次）"
-          done
-
-          if [ -z "$run_id" ]; then
-            echo "错误: 轮询超时，未能定位到本次触发的 IPK run" >&2
-            exit 1
-          fi
-
-          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
-
-      - name: Wait for IPK build
-        if: steps.check.outputs.changed == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh run watch "${{ steps.trigger_ipk.outputs.run_id }}" --exit-status
-
       - name: Trigger APK build
         if: steps.check.outputs.changed == 'true'
         id: trigger_apk
@@ -137,6 +99,44 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh run watch "${{ steps.trigger_apk.outputs.run_id }}" --exit-status
+
+      - name: Trigger IPK build
+        if: steps.check.outputs.changed == 'true'
+        id: trigger_ipk
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SINCE=$(date -u -d '-30 seconds' +%Y-%m-%dT%H:%M:%SZ)
+          gh workflow run substore-ipk.yml \
+            -f version="${{ steps.ver.outputs.version }}" \
+            -f backend_tag="${{ steps.check.outputs.backend_latest }}" \
+            -f frontend_tag="${{ steps.check.outputs.frontend_latest }}"
+
+          run_id=""
+          for i in $(seq 1 24); do
+            sleep 5
+            run_id=$(gh run list --workflow=substore-ipk.yml --json databaseId,createdAt,event \
+              --jq "[.[] | select(.event==\"workflow_dispatch\" and .createdAt >= \"$SINCE\")] | sort_by(.createdAt) | .[0].databaseId // empty")
+            if [ -n "$run_id" ]; then
+              echo "定位到本次触发的 IPK run: $run_id"
+              break
+            fi
+            echo "还没找到本次触发的 IPK run，重试中...（第 $i 次）"
+          done
+
+          if [ -z "$run_id" ]; then
+            echo "错误: 轮询超时，未能定位到本次触发的 IPK run" >&2
+            exit 1
+          fi
+
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for IPK build
+        if: steps.check.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh run watch "${{ steps.trigger_ipk.outputs.run_id }}" --exit-status
 
       - name: Update cached version files
         if: steps.check.outputs.changed == 'true'
