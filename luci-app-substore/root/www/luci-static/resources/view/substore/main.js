@@ -71,12 +71,82 @@ function formatVersionLine(label, version) {
 	if (v.length > 60) {
 		v = v.slice(0, 60) + '…';
 	}
-	return '<span style="margin-right:20px;">' + label + ': <b>' + escapeHtml(v) + '</b></span>';
+	return '<div style="display:flex !important;justify-content:space-between;align-items:center;' +
+		'background:linear-gradient(135deg,#ffffff,#f5f7fb);' +
+		'border:1px solid #e3e8f0;border-radius:8px;' +
+		'padding:5px 10px;' +
+		'box-shadow:0 1px 2px rgba(0,0,0,0.04);width:100% !important;box-sizing:border-box;">' +
+		'<span style="font-size:11px;color:#8a94a6;font-weight:500;">' + label + '</span>' +
+		'<span style="font-size:13px;font-weight:600;color:#2d3748;word-break:break-all;text-align:right;">' + escapeHtml(v) + '</span>' +
+		'</div>';
 }
 
 function renderVersionInfo(info) {
-	return formatVersionLine('后端', info.backendVersion) +
-		formatVersionLine('前端', info.frontendVersion);
+	return '<div style="display:grid !important;grid-template-columns:repeat(2,1fr) !important;gap:8px !important;width:100% !important;">' +
+		formatVersionLine('后端版本', info.backendVersion) +
+		formatVersionLine('前端版本', info.frontendVersion) +
+		'</div>';
+}
+
+function renderStatusBadge(isRunning) {
+	var color = isRunning ? '#2ecc71' : '#e74c3c';
+	var text = 'SubStore ' + (isRunning ? '运行中' : '未运行');
+	return '<div id="substore_status_indicator" style="display:flex !important;align-items:center;justify-content:center;gap:8px;' +
+		'background:linear-gradient(135deg,#ffffff,#f5f7fb);' +
+		'border:1px solid #e3e8f0;border-radius:8px;' +
+		'padding:8px 14px;width:100% !important;box-sizing:border-box;' +
+		'box-shadow:0 1px 2px rgba(0,0,0,0.04);">' +
+		'<span style="width:9px;height:9px;border-radius:50%;background:' + color + ';flex-shrink:0;"></span>' +
+		'<span style="font-style:italic;font-weight:700;font-size:15px;line-height:1.4 !important;color:' + color + ';letter-spacing:-0.3px;">' + text + '</span>' +
+		'</div>';
+}
+
+function actionButtonStyle(enabled) {
+	var base = 'display:block !important;width:100% !important;box-sizing:border-box !important;' +
+		'margin:0 !important;float:none !important;text-align:center;padding:8px 8px;' +
+		'font-size:13px;font-weight:400;line-height:1.4 !important;overflow:visible !important;' +
+		'white-space:normal !important;height:auto !important;';
+	return base + (enabled ? '' : 'opacity:0.45;filter:grayscale(70%);cursor:not-allowed;');
+}
+
+function renderToggleButton(isRunning) {
+	var label = isRunning ? '停止服务' : '启动服务';
+	var cls = isRunning ? 'cbi-button-remove' : 'cbi-button-action';
+	return '<button id="btn_toggle" class="btn cbi-button ' + cls + '" ' +
+		'style="' + actionButtonStyle(true) + '">' + label + '</button>';
+}
+
+function renderOpenPanelGridButton(isRunning, url) {
+	if (isRunning) {
+		return '<a href="' + url + '" target="_blank" id="substore_open_btn" ' +
+			'class="btn cbi-button cbi-button-action" style="' + actionButtonStyle(true) + '">打开面板</a>';
+	}
+	return '<span id="substore_open_btn" class="btn cbi-button cbi-button-action" ' +
+		'style="' + actionButtonStyle(false) + 'pointer-events:none;">打开面板</span>';
+}
+
+function renderActionsPanel(isRunning, isEnabled, url) {
+	var toggleHtml = renderToggleButton(isRunning);
+	var openHtml = renderOpenPanelGridButton(isRunning, url);
+	var restartStyle = actionButtonStyle(isEnabled);
+	return '<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #e3e8f0;">' + toggleHtml + '</div>' +
+		'<div style="display:grid !important;grid-template-columns:repeat(2,1fr) !important;gap:8px !important;width:100% !important;align-items:stretch;">' +
+		openHtml +
+		'<button class="btn cbi-button cbi-button-apply" id="btn_restart" style="' + restartStyle + '">重启服务</button>' +
+		'</div>';
+}
+
+function injectDesktopCss() {
+	if (document.getElementById('substore_desktop_css')) return;
+	var style = document.createElement('style');
+	style.id = 'substore_desktop_css';
+	style.textContent =
+		'@media (min-width: 768px) {' +
+		'#substore_status_wrap, #substore_version_info, #substore_actions_panel, #substore_update_panel {' +
+		'max-width: 480px !important; margin-left: 0 !important; margin-right: auto !important;' +
+		'}' +
+		'}';
+	document.head.appendChild(style);
 }
 
 function runSourceScript(scriptPath, source) {
@@ -133,18 +203,14 @@ function buildPanelUrl(sectionId) {
 
 function refreshRunningState(node) {
 	return getServiceStatus().then(function(running) {
-		var indicator = node.querySelector('#substore_status_indicator');
-		if (indicator) {
-			indicator.style.color = running ? '#2ecc71' : '#e74c3c';
-			indicator.textContent = '● ' + (running ? '运行中' : '已停止');
+		var indicatorWrap = node.querySelector('#substore_status_wrap');
+		if (indicatorWrap) {
+			indicatorWrap.innerHTML = renderStatusBadge(running);
 		}
-		var panel = node.querySelector('#substore_open_panel');
-		if (panel) {
-			if (running) {
-				panel.innerHTML = '<a href="%s" target="_blank" class="btn cbi-button cbi-button-action">打开 Sub-Store ↗</a>'.format(buildPanelUrl());
-			} else {
-				panel.innerHTML = '<span style="color:#999;">— 请先启动服务 —</span>';
-			}
+		var actionsWrap = node.querySelector('#substore_actions_panel');
+		if (actionsWrap) {
+			actionsWrap.innerHTML = renderActionsPanel(running, isServiceEnabled(), buildPanelUrl());
+			bindActionButtons(node);
 		}
 		return running;
 	});
@@ -237,8 +303,66 @@ function guardedClick(btn, action) {
 	});
 }
 
-function actionButtonStyle(enabled) {
-	return enabled ? '' : 'opacity:0.45;filter:grayscale(70%);cursor:not-allowed;';
+function bindActionButtons(node) {
+	var btnToggle = node.querySelector('#btn_toggle');
+	if (btnToggle) {
+		btnToggle.addEventListener('click', function() {
+			var action = btnToggle.textContent.indexOf('停止') !== -1 ? 'stop' : 'start';
+			btnToggle.disabled = true;
+			if (action === 'start') btnToggle.style.color = '#e67e22';
+			btnToggle.textContent = (action === 'stop') ? '停止中...' : '启动中...';
+			toggleServiceAndReload(action).catch(function() {
+				ui.addNotification(null, E('p', (action === 'stop' ? '停止' : '启动') + '失败。'), 'danger');
+				btnToggle.disabled = false;
+				btnToggle.style.color = '';
+				btnToggle.textContent = (action === 'stop') ? '停止服务' : '启动服务';
+			});
+		});
+	}
+
+	var btnRestart = node.querySelector('#btn_restart');
+	guardedClick(btnRestart, function() {
+		btnRestart.disabled = true;
+		btnRestart.style.color = '#e67e22';
+		btnRestart.textContent = '重启中...';
+		runInitActionAndReload('restart').catch(function() {
+			ui.addNotification(null, E('p', '重启失败。'), 'danger');
+			btnRestart.disabled = false;
+			btnRestart.style.color = '';
+			btnRestart.textContent = '重启服务';
+		});
+	});
+}
+
+function forceStackedRow(node, innerId, align) {
+	var el = node.querySelector('#' + innerId);
+	if (!el) return;
+
+	var row = el.closest('.cbi-value') || el.parentElement;
+	if (row) {
+		row.style.setProperty('display', 'block', 'important');
+		row.style.overflow = 'visible';
+	}
+
+	var title = row ? row.querySelector('.cbi-value-title') : null;
+	if (title) {
+		title.style.setProperty('display', 'block', 'important');
+		title.style.setProperty('width', 'auto', 'important');
+		title.style.setProperty('float', 'none', 'important');
+		title.style.marginBottom = '8px';
+		if (align) {
+			title.style.setProperty('text-align', align, 'important');
+		}
+	}
+
+	var field = row ? row.querySelector('.cbi-value-field') : null;
+	if (field) {
+		field.style.setProperty('display', 'block', 'important');
+		field.style.setProperty('width', '100%', 'important');
+		field.style.setProperty('max-width', 'none', 'important');
+		field.style.setProperty('margin-left', '0', 'important');
+		field.style.setProperty('float', 'none', 'important');
+	}
 }
 
 return view.extend({
@@ -262,50 +386,33 @@ return view.extend({
 		s = m.section(form.NamedSection, 'config', 'substore', _('服务状态'));
 		s.anonymous = true;
 
-		o = s.option(form.DummyValue, '_status', _('运行状态'));
+		o = s.option(form.DummyValue, '_status', '');
 		o.rawhtml = true;
 		o.cfgvalue = function() {
-			var color = isRunning ? '#2ecc71' : '#e74c3c';
-			var text  = isRunning ? _('运行中') : _('已停止');
-			return '<span id="substore_status_indicator" style="color:%s;font-weight:bold;">● %s</span>'.format(color, text);
+			return '<div id="substore_status_wrap">' + renderStatusBadge(isRunning) + '</div>';
 		};
 
-		o = s.option(form.DummyValue, '_version', _('版本信息'));
+		o = s.option(form.DummyValue, '_version', '');
 		o.rawhtml = true;
 		o.cfgvalue = function() {
-			return '<div id="substore_version_info" style="display:flex;flex-wrap:wrap;line-height:1.6;">' + renderVersionInfo(versionInfo) + '</div>';
-		};
-
-		o = s.option(form.DummyValue, '_open', _('网页面板'));
-		o.rawhtml = true;
-		o.cfgvalue = function(section_id) {
-			var inner = isRunning
-				? '<a href="%s" target="_blank" class="btn cbi-button cbi-button-action">打开 Sub-Store ↗</a>'.format(buildPanelUrl(section_id))
-				: '<span style="color:#999;">— 请先启动服务 —</span>';
-			return '<div id="substore_open_panel">' + inner + '</div>';
+			return '<div id="substore_version_info">' + renderVersionInfo(versionInfo) + '</div>';
 		};
 
 		o = s.option(form.DummyValue, '_actions', _('操作'));
 		o.rawhtml = true;
-		o.cfgvalue = function() {
-			var toggleLabel = isRunning ? '停止服务' : '启动服务';
-			var toggleClass = isRunning ? 'cbi-button-remove' : 'cbi-button-action';
-			var restartStyle = actionButtonStyle(isEnabled);
-			return '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">' +
-				'<button class="btn cbi-button ' + toggleClass + '" id="btn_toggle">' + toggleLabel + '</button>' +
-				'<button class="btn cbi-button cbi-button-apply" id="btn_restart" style="' + restartStyle + '">重启服务</button>' +
-				'</div>';
+		o.cfgvalue = function(section_id) {
+			return '<div id="substore_actions_panel">' + renderActionsPanel(isRunning, isEnabled, buildPanelUrl(section_id)) + '</div>';
 		};
 		o.write = function() {};
 
-		o = s.option(form.DummyValue, '_update', _('更新'));
+		o = s.option(form.DummyValue, '_update', '');
 		o.rawhtml = true;
 		o.cfgvalue = function() {
 			var style = actionButtonStyle(isEnabled);
-			return '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">' +
+			return '<div id="substore_update_panel" style="display:grid !important;grid-template-columns:repeat(2,1fr) !important;gap:8px !important;width:100% !important;align-items:stretch;margin-top:8px;">' +
 				'<button class="btn cbi-button cbi-button-action" id="btn_update_backend" style="' + style + '">更新后端</button>' +
 				'<button class="btn cbi-button cbi-button-action" id="btn_update_frontend" style="' + style + '">更新前端</button>' +
-				'<span id="update_status" style="font-size:13px;color:#666;"></span>' +
+				'<span id="update_status" style="grid-column:1 / -1;font-size:13px;color:#666;text-align:center;"></span>' +
 				'</div>';
 		};
 		o.write = function() {};
@@ -348,34 +455,14 @@ return view.extend({
 
 		return m.render().then(function(node) {
 
-			var btnRestart = node.querySelector('#btn_restart');
-			guardedClick(btnRestart, function() {
-				btnRestart.disabled = true;
-				btnRestart.style.color = '#e67e22';
-				btnRestart.textContent = '重启中...';
-				runInitActionAndReload('restart').catch(function() {
-					ui.addNotification(null, E('p', '重启失败。'), 'danger');
-					btnRestart.disabled = false;
-					btnRestart.style.color = '';
-					btnRestart.textContent = '重启服务';
-				});
-			});
+			injectDesktopCss();
 
-			var btnToggle = node.querySelector('#btn_toggle');
-			if (btnToggle) {
-				btnToggle.addEventListener('click', function() {
-					var action = btnToggle.textContent.indexOf('停止') !== -1 ? 'stop' : 'start';
-					btnToggle.disabled = true;
-					if (action === 'start') btnToggle.style.color = '#e67e22';
-					btnToggle.textContent = (action === 'stop') ? '停止中...' : '启动中...';
-					toggleServiceAndReload(action).catch(function() {
-						ui.addNotification(null, E('p', (action === 'stop' ? '停止' : '启动') + '失败。'), 'danger');
-						btnToggle.disabled = false;
-						btnToggle.style.color = '';
-						btnToggle.textContent = (action === 'stop') ? '停止服务' : '启动服务';
-					});
-				});
-			}
+			forceStackedRow(node, 'substore_status_wrap');
+			forceStackedRow(node, 'substore_version_info');
+			forceStackedRow(node, 'substore_actions_panel', 'left');
+			forceStackedRow(node, 'substore_update_panel');
+
+			bindActionButtons(node);
 
 			var btnUpdateBackend = node.querySelector('#btn_update_backend');
 			var updateStatus = node.querySelector('#update_status');
